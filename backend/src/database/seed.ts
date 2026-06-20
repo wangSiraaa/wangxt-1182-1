@@ -76,7 +76,7 @@ export const seedDatabase = async () => {
         role: UserRole.CENTRAL_LAB,
         orgName: '中国食品药品检定研究院中心实验室',
       },
-    ]);
+    ], { individualHooks: true });
 
     console.log(`✓ Seeded ${users.length} users successfully`);
     console.log('  Default accounts:');

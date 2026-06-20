@@ -68,7 +68,7 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME}_frontend
     environment:
       NODE_ENV: development
-      VITE_API_BASE_URL: http://localhost:${API_PORT}
+      VITE_PROXY_TARGET: http://backend:19482
     ports:
       - "${WEB_PORT}:20482"
     depends_on:
