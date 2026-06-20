@@ -1,6 +1,15 @@
 import { Router } from 'express';
 import Joi from 'joi';
-import { SampleBox, Document, TemperatureRecord, FlowLog, FreezeRecord } from '../models';
+import {
+  SampleBox,
+  Document,
+  TemperatureRecord,
+  FlowLog,
+  FreezeRecord,
+  SampleTube,
+  TemperatureReview,
+  BoxSplitRecord,
+} from '../models';
 import { AuthRequest, authMiddleware, requireRoles } from '../middleware/auth';
 import { validateBody, validateQuery } from '../middleware/validation';
 import { successResponse, errorResponse } from '../utils/response';
@@ -132,6 +141,16 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
           as: 'freezeRecords',
           order: [['initiatedAt', 'DESC']],
         },
+        {
+          model: SampleTube,
+          as: 'sampleTubes',
+          order: [['seqNo', 'ASC']],
+        },
+        {
+          model: TemperatureReview,
+          as: 'temperatureReviews',
+          order: [['reviewAt', 'DESC']],
+        },
       ],
     });
 
@@ -139,17 +158,47 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
       return errorResponse(res, '样本盒不存在', 404);
     }
 
+    const splitRecords = await BoxSplitRecord.findAll({
+      where: {
+        [Op.or]: [
+          { sourceBoxId: req.params.id },
+          { targetBoxIds: { [Op.contains]: [req.params.id] } },
+        ],
+      },
+      order: [['operatedAt', 'DESC']],
+    });
+
     const availableTransitions = getAvailableTransitions(
       sampleBox.status as SampleBoxStatus,
       req.user!.role as UserRole
     );
 
+    const docGaps: any[] = [];
+    const requiredDocs = [
+      DocumentType.ETHICS_APPROVAL,
+      DocumentType.CUSTOMS_DECLARATION,
+      DocumentType.BIOLOGICAL_SAMPLE_PERMIT,
+      DocumentType.SHIPPING_INVOICE,
+      DocumentType.PACKING_LIST,
+    ];
+    const docs = sampleBox.documents || [];
+    for (const docType of requiredDocs) {
+      const matched = docs.find(
+        (d: any) => d.documentType === docType && d.status === DocumentStatus.VERIFIED
+      );
+      if (!matched) {
+        docGaps.push({ documentType: docType });
+      }
+    }
+
     return successResponse(
       res,
       {
         ...sampleBox.toJSON(),
+        splitRecords,
         availableTransitions,
         canUpdateSubjectCode: canUpdateSubjectCode(sampleBox),
+        documentGaps: docGaps,
       },
       '查询成功'
     );

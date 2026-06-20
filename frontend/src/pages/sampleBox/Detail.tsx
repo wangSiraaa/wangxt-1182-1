@@ -31,11 +31,15 @@ import {
   PlusOutlined,
   EnvironmentOutlined,
   EyeOutlined,
+  ScissorOutlined,
+  ExperimentOutlined,
+  LinkOutlined,
+  HistoryOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../api';
 import { useAuthStore, UserRoleLabels } from '../../store/auth';
-import { UserRole, SampleBoxStatus } from '../../utils/enums';
+import { UserRole, SampleBoxStatus, TemperatureReviewConclusion, BoxSplitStatus } from '../../utils/enums';
 import {
   SampleBoxStatusLabels,
   SampleBoxStatusColors,
@@ -43,6 +47,10 @@ import {
   DocumentStatusLabels,
   FreezeReasonLabels,
   ApprovalStatusLabels,
+  TemperatureReviewConclusionLabels,
+  TemperatureReviewConclusionColors,
+  SplitTypeLabels,
+  BoxSplitStatusLabels,
   formatTemperature,
   formatDate,
 } from '../../utils/constants';
@@ -68,6 +76,15 @@ const SampleBoxDetail = () => {
   const [editForm] = Form.useForm();
   const [tempModalOpen, setTempModalOpen] = useState(false);
   const [tempForm] = Form.useForm();
+  const [splitModalOpen, setSplitModalOpen] = useState(false);
+  const [splitForm] = Form.useForm();
+  const [abnormalConclusionModal, setAbnormalConclusionModal] = useState<{
+    open: boolean;
+    freezeRecordId: string;
+  }>({ open: false, freezeRecordId: '' });
+  const [abnormalConclusionForm] = Form.useForm();
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewForm] = Form.useForm();
 
   useEffect(() => {
     if (id) loadData();
@@ -132,6 +149,75 @@ const SampleBoxDetail = () => {
       loadData();
     } catch (error) {
       console.error('Temp record error:', error);
+    }
+  };
+
+  const handleSplit = async (values: any) => {
+    try {
+      const targetBoxes =
+        values.targetBoxes || [];
+      const targetBoxCount = targetBoxes.filter(
+        (b: any) => b.boxCode && b.sampleCount > 0
+      );
+      if (targetBoxCount.length < 1) {
+        message.warning('请至少填写一个子盒');
+        return;
+      }
+      const submitBoxes = targetBoxCount.map((b: any) => ({
+        boxCode: b.boxCode,
+        sampleCount: b.sampleCount,
+        subjectCode: b.subjectCode || data.subjectCode,
+      }));
+      await api.post('/box-splits/split', {
+        sourceBoxId: id,
+        splitType: values.splitType || 'by_count',
+        splitReason: values.splitReason,
+        targetBoxes: submitBoxes,
+      });
+      message.success('分箱成功');
+      setSplitModalOpen(false);
+      splitForm.resetFields();
+      loadData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddAbnormalConclusion = async () => {
+    try {
+      const values = await abnormalConclusionForm.validateFields();
+      if (data.subjectCodeLocked && values.subjectCode && values.subjectCode !== data.subjectCode) {
+        message.error('到样确认后不能修改受试者编码，只能补充异常结论');
+        return;
+      }
+      await api.post(
+        `/temperature-reviews/freezing-records/${abnormalConclusionModal.freezeRecordId}/abnormal-conclusion`,
+        {
+          abnormalConclusion: values.abnormalConclusion,
+          subjectCode: data.subjectCodeLocked ? undefined : values.subjectCode,
+        }
+      );
+      message.success('异常结论补充成功');
+      setAbnormalConclusionModal({ open: false, freezeRecordId: '' });
+      abnormalConclusionForm.resetFields();
+      loadData();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCreateReview = async (values: any) => {
+    try {
+      await api.post('/temperature-reviews', {
+        ...values,
+        sampleBoxId: id,
+      });
+      message.success('温度复核记录创建成功');
+      setReviewModalOpen(false);
+      reviewForm.resetFields();
+      loadData();
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -261,14 +347,213 @@ const SampleBoxDetail = () => {
       title: '处理情况',
       key: 'result',
       render: (_: any, r: any) => (
-        <div>
-          {r.isDestroyed ? (
-            <Tag color="default">已销毁：{r.destroyReason}</Tag>
-          ) : r.isThawed ? (
-            <Tag color="green">已解冻：{r.thawReason}</Tag>
-          ) : (
-            <span style={{ color: '#999' }}>未处理</span>
+        <Space direction="vertical" size={4}>
+          <div>
+            {r.isDestroyed ? (
+              <Tag color="default">已销毁：{r.destroyReason}</Tag>
+            ) : r.isThawed ? (
+              <Tag color="green">已解冻：{r.thawReason}</Tag>
+            ) : (
+              <span style={{ color: '#999' }}>未处理</span>
+            )}
+          </div>
+          {r.abnormalConclusion && (
+            <div
+              style={{
+                marginTop: 4,
+                padding: '6px 10px',
+                background: '#fffbe6',
+                border: '1px solid #ffe58f',
+                borderRadius: 4,
+                fontSize: 12,
+                lineHeight: 1.6,
+              }}
+            >
+              <div style={{ color: '#873800', fontWeight: 600 }}>异常结论：</div>
+              <div style={{ color: '#333' }}>{r.abnormalConclusion}</div>
+              <div style={{ marginTop: 2, color: '#999' }}>
+                {r.abnormalConclusionByName || ''} ·{' '}
+                {formatDate(r.abnormalConclusionAt)}
+              </div>
+            </div>
           )}
+          <div>
+            <Button
+              type="link"
+              size="small"
+              icon={<ExperimentOutlined />}
+              onClick={() => {
+                abnormalConclusionForm.setFieldsValue({
+                  abnormalConclusion: r.abnormalConclusion || '',
+                  subjectCode: data.subjectCode,
+                });
+                setAbnormalConclusionModal({ open: true, freezeRecordId: r.id });
+              }}
+              disabled={!(user?.role === UserRole.CENTRAL_LAB || user?.role === UserRole.ADMIN)}
+            >
+              {r.abnormalConclusion ? '补充' : '填写'}异常结论
+            </Button>
+          </div>
+        </Space>
+      ),
+    },
+  ];
+
+  const tubeColumns = [
+    {
+      title: '序号',
+      dataIndex: 'seqNo',
+      key: 'seqNo',
+      width: 70,
+      render: (v: number) => (v != null ? `#${v}` : '-'),
+    },
+    {
+      title: '管号',
+      dataIndex: 'tubeCode',
+      key: 'tubeCode',
+      render: (v: string) => <b style={{ fontFamily: 'monospace' }}>{v}</b>,
+    },
+    {
+      title: '母盒',
+      dataIndex: 'originalSampleBoxCode',
+      key: 'originalSampleBoxCode',
+      render: (v: string, r: any) =>
+        r.originalSampleBoxId && v ? (
+          <Tooltip title="来自分箱前的母盒">
+            <Tag color="purple">{v}</Tag>
+          </Tooltip>
+        ) : (
+          <span style={{ color: '#ccc' }}>—</span>
+        ),
+    },
+    {
+      title: '受试者编码',
+      dataIndex: 'subjectCode',
+      key: 'subjectCode',
+      render: (v: string) => v || data.subjectCode || '-',
+    },
+    {
+      title: '伦理批件号',
+      dataIndex: 'ethicsApprovalNo',
+      key: 'ethicsApprovalNo',
+      render: (v: string) => v || data.ethicsApprovalNo || '-',
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      render: (v: string) => (v ? <Tag>{v}</Tag> : '-'),
+    },
+  ];
+
+  const reviewColumns = [
+    {
+      title: '结论',
+      dataIndex: 'conclusion',
+      key: 'conclusion',
+      width: 100,
+      render: (v: string) => (
+        <Tag
+          color={
+            TemperatureReviewConclusionColors[
+              v as keyof typeof TemperatureReviewConclusionColors
+            ] || 'default'
+          }
+        >
+          {TemperatureReviewConclusionLabels[
+            v as keyof typeof TemperatureReviewConclusionLabels
+          ] || v}
+        </Tag>
+      ),
+    },
+    {
+      title: '超限时长',
+      dataIndex: 'exceededDurationMinutes',
+      key: 'exceededDurationMinutes',
+      width: 120,
+      render: (v: number) => (v ? `${v} 分钟` : '-'),
+    },
+    {
+      title: '结论说明',
+      dataIndex: 'conclusionDetail',
+      key: 'conclusionDetail',
+    },
+    {
+      title: '复核后可用',
+      dataIndex: 'isUsableAfterReview',
+      key: 'isUsableAfterReview',
+      width: 100,
+      render: (v: boolean) =>
+        v === undefined ? (
+          '-'
+        ) : v ? (
+          <Tag color="green">可用</Tag>
+        ) : (
+          <Tag color="red">不可用</Tag>
+        ),
+    },
+    {
+      title: '后续步骤',
+      dataIndex: 'nextStep',
+      key: 'nextStep',
+    },
+    {
+      title: '复核人/时间',
+      key: 'operator',
+      width: 200,
+      render: (_: any, r: any) => (
+        <div>
+          <div>{r.reviewerName || '-'}</div>
+          <div style={{ fontSize: 12, color: '#999' }}>{formatDate(r.reviewAt)}</div>
+        </div>
+      ),
+    },
+  ];
+
+  const splitColumns = [
+    {
+      title: '分箱方式',
+      dataIndex: 'splitType',
+      key: 'splitType',
+      render: (v: string) => SplitTypeLabels[v] || v,
+    },
+    {
+      title: '源盒',
+      dataIndex: 'sourceBoxCode',
+      key: 'sourceBoxCode',
+    },
+    {
+      title: '子盒数',
+      key: 'targets',
+      render: (_: any, r: any) =>
+        r.targetBoxIds ? (
+          <Tag color="blue">{r.targetBoxIds.length} 个</Tag>
+        ) : (
+          '-'
+        ),
+    },
+    {
+      title: '分箱原因',
+      dataIndex: 'splitReason',
+      key: 'splitReason',
+    },
+    {
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      render: (v: string) => (
+        <Tag color={v === BoxSplitStatus.COMPLETED ? 'green' : 'blue'}>
+          {BoxSplitStatusLabels[v as keyof typeof BoxSplitStatusLabels] || v}
+        </Tag>
+      ),
+    },
+    {
+      title: '操作人/时间',
+      key: 'op',
+      render: (_: any, r: any) => (
+        <div>
+          <div>{r.operatedByName || '-'}</div>
+          <div style={{ fontSize: 12, color: '#999' }}>{formatDate(r.operatedAt)}</div>
         </div>
       ),
     },
@@ -347,6 +632,37 @@ const SampleBoxDetail = () => {
                 录入温度
               </Button>
             )}
+            {(user?.role === UserRole.CENTRAL_LAB || user?.role === UserRole.ADMIN) && (
+              <Button icon={<ExperimentOutlined />} onClick={() => setReviewModalOpen(true)}>
+                温度复核
+              </Button>
+            )}
+            {(user?.role === UserRole.RESEARCH_CENTER || user?.role === UserRole.ADMIN) &&
+              (data.status === SampleBoxStatus.DRAFT ||
+                data.status === SampleBoxStatus.REGISTERED) && (
+                <Button
+                  icon={<ScissorOutlined />}
+                  danger
+                  onClick={() => {
+                    splitForm.setFieldsValue({
+                      splitType: 'by_count',
+                      splitReason: '',
+                      targetBoxes: [
+                        { sampleCount: Math.ceil((data.sampleCount || 0) / 2) },
+                        { sampleCount: Math.floor((data.sampleCount || 0) / 2) },
+                      ],
+                    });
+                    setSplitModalOpen(true);
+                  }}
+                >
+                  分箱出境
+                </Button>
+              )}
+            {(user?.role === UserRole.CUSTOMS_OFFICER || user?.role === UserRole.ADMIN) && (
+              <Button icon={<EyeOutlined />} onClick={() => navigate(`/customs/${id}`)}>
+                报关视角
+              </Button>
+            )}
             {(data.availableTransitions || []).length > 0 && (
               <>
                 {(data.availableTransitions || []).map((t: any) => (
@@ -417,6 +733,24 @@ const SampleBoxDetail = () => {
             {data.remarks || '-'}
           </Descriptions.Item>
         </Descriptions>
+
+        {(data.documentGaps || []).length > 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginTop: 16 }}
+            message={`存在 ${data.documentGaps.length} 个单证缺口，可能影响出境流程`}
+            description={
+              <Space wrap size={[4, 4]}>
+                {(data.documentGaps || []).map((g: any, idx: number) => (
+                  <Tag color="red" key={idx}>
+                    缺失：{DocumentTypeLabels[g.documentType] || g.documentType}
+                  </Tag>
+                ))}
+              </Space>
+            }
+          />
+        )}
 
         <div style={{ marginTop: 16 }}>
           <h4 style={{ marginBottom: 12 }}>
@@ -612,6 +946,61 @@ const SampleBoxDetail = () => {
                 </Descriptions>
               ),
             },
+            {
+              key: 'tubes',
+              label: (
+                <Space>
+                  <LinkOutlined />
+                  样本管 (${(data.sampleTubes || []).length})
+                </Space>
+              ),
+              children: (
+                <Table
+                  rowKey="id"
+                  columns={tubeColumns}
+                  dataSource={data.sampleTubes || []}
+                  pagination={{ pageSize: 10, showSizeChanger: true }}
+                  size="small"
+                  scroll={{ x: 900 }}
+                />
+              ),
+            },
+            {
+              key: 'reviews',
+              label: (
+                <Space>
+                  <ExperimentOutlined />
+                  温度复核 (${(data.temperatureReviews || []).length})
+                </Space>
+              ),
+              children: (
+                <Table
+                  rowKey="id"
+                  columns={reviewColumns}
+                  dataSource={data.temperatureReviews || []}
+                  pagination={{ pageSize: 10 }}
+                  size="small"
+                />
+              ),
+            },
+            {
+              key: 'splits',
+              label: (
+                <Space>
+                  <ScissorOutlined />
+                  分箱记录 (${(data.splitRecords || []).length})
+                </Space>
+              ),
+              children: (
+                <Table
+                  rowKey="id"
+                  columns={splitColumns}
+                  dataSource={data.splitRecords || []}
+                  pagination={{ pageSize: 10 }}
+                  size="small"
+                />
+              ),
+            },
           ]}
         />
       </Card>
@@ -798,6 +1187,287 @@ const SampleBoxDetail = () => {
               <Button onClick={() => setTempModalOpen(false)}>取消</Button>
               <Button type="primary" htmlType="submit">
                 确认录入
+              </Button>
+            </Space>
+          </div>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={
+          <Space>
+            <ScissorOutlined />
+            分箱出境
+          </Space>
+        }
+        open={splitModalOpen}
+        onCancel={() => {
+          setSplitModalOpen(false);
+          splitForm.resetFields();
+        }}
+        footer={null}
+        width={860}
+        destroyOnClose
+      >
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="分箱说明"
+          description={
+            <div>
+              <div>• 同一研究中心同一受试者多管样本可拆分为多个子盒出境</div>
+              <div>• 分箱后原盒将清零，所有样本管会保留原始母盒/分箱记录溯源</div>
+              <div>• 子盒样本数量总和必须等于母盒样本数</div>
+              <div>
+                当前母盒：
+                <Tag color="blue">{data.boxCode}</Tag> 共
+                <Tag color="green">{data.sampleCount || 0}</Tag>
+                管样本
+              </div>
+            </div>
+          }
+        />
+        <Form form={splitForm} layout="vertical" onFinish={handleSplit}>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="分箱方式"
+                name="splitType"
+                rules={[{ required: true }]}
+              >
+                <Select>
+                  <Option value="by_count">按数量分箱</Option>
+                  <Option value="by_type">按类型分箱</Option>
+                  <Option value="manual">手动分箱</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="分箱原因" name="splitReason">
+                <Select allowClear placeholder="选择原因（选填）">
+                  <Option value="split_export">分箱出境</Option>
+                  <Option value="merge_error">原盒装箱错误</Option>
+                  <Option value="shipment_requirement">物流要求</Option>
+                  <Option value="other">其他</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+          <Divider orientation="left" style={{ marginTop: 0 }}>
+            子盒配置
+          </Divider>
+          <Form.List name="targetBoxes">
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map(({ key, name, ...restField }) => (
+                  <Card
+                    key={key}
+                    size="small"
+                    style={{ marginBottom: 12, background: '#fafafa' }}
+                    title={`子盒 #${name + 1}`}
+                    extra={
+                      fields.length > 1 ? (
+                        <Button danger size="small" onClick={() => remove(name)}>
+                          删除
+                        </Button>
+                      ) : null
+                    }
+                  >
+                    <Row gutter={12}>
+                      <Col span={10}>
+                        <Form.Item
+                          {...restField}
+                          label="子盒编码"
+                          name={[name, 'boxCode']}
+                          rules={[{ required: true, message: '请输入子盒编码' }]}
+                          style={{ marginBottom: 0 }}
+                        >
+                          <Input placeholder="例: BOX-SUB-001" />
+                        </Form.Item>
+                      </Col>
+                      <Col span={8}>
+                        <Form.Item
+                          {...restField}
+                          label="样本管数"
+                          name={[name, 'sampleCount']}
+                          rules={[{ required: true }]}
+                          style={{ marginBottom: 0 }}
+                        >
+                          <InputNumber min={1} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </Col>
+                      <Col span={6}>
+                        <Form.Item
+                          {...restField}
+                          label="受试者"
+                          name={[name, 'subjectCode']}
+                          style={{ marginBottom: 0 }}
+                          initialValue={data.subjectCode}
+                        >
+                          <Input placeholder="默认继承母盒" />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                  </Card>
+                ))}
+                <Button
+                  type="dashed"
+                  onClick={() => add()}
+                  block
+                  icon={<PlusOutlined />}
+                  style={{ marginBottom: 12 }}
+                >
+                  增加子盒
+                </Button>
+              </>
+            )}
+          </Form.List>
+          <div style={{ textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => setSplitModalOpen(false)}>取消</Button>
+              <Button type="primary" htmlType="submit" danger>
+                <ScissorOutlined /> 确认分箱
+              </Button>
+            </Space>
+          </div>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={
+          <Space>
+            <ExperimentOutlined />
+            实验室补充异常结论
+          </Space>
+        }
+        open={abnormalConclusionModal.open}
+        onCancel={() => {
+          setAbnormalConclusionModal({ open: false, freezeRecordId: '' });
+          abnormalConclusionForm.resetFields();
+        }}
+        onOk={handleAddAbnormalConclusion}
+        okText="确认补充"
+        destroyOnClose
+      >
+        {data.subjectCodeLocked && (
+          <Alert
+            type="error"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="受试者编码已锁定"
+            description={`
+              到样确认（温度确认）后，受试者编码已被锁定，只能补充异常结论，不能修改编码。
+              当前受试者编码：${data.subjectCode}
+            `}
+          />
+        )}
+        <Form form={abnormalConclusionForm} layout="vertical">
+          <Form.Item
+            label={`受试者编码${data.subjectCodeLocked ? '（已锁定，不可修改）' : ''}`}
+            name="subjectCode"
+            rules={data.subjectCodeLocked ? [] : [{ required: true, message: '请输入' }]}
+          >
+            <Input disabled={data.subjectCodeLocked} />
+          </Form.Item>
+          <Form.Item
+            label="异常结论"
+            name="abnormalConclusion"
+            rules={[{ required: true, message: '请填写异常结论' }]}
+          >
+            <TextArea
+              rows={5}
+              placeholder="请详细描述温度异常情况、样本状态评估、是否可用、后续处理建议等"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title={
+          <Space>
+            <ExperimentOutlined />
+            温度异常复核
+          </Space>
+        }
+        open={reviewModalOpen}
+        onCancel={() => {
+          setReviewModalOpen(false);
+          reviewForm.resetFields();
+        }}
+        footer={null}
+        width={640}
+        destroyOnClose
+      >
+        <Form form={reviewForm} layout="vertical" onFinish={handleCreateReview}>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="复核结论"
+                name="conclusion"
+                initialValue={TemperatureReviewConclusion.PENDING}
+                rules={[{ required: true }]}
+              >
+                <Select>
+                  <Option value={TemperatureReviewConclusion.PENDING}>待复核</Option>
+                  <Option value={TemperatureReviewConclusion.USABLE}>可用</Option>
+                  <Option value={TemperatureReviewConclusion.UNUSABLE}>不可用</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="关联冻结记录" name="freezeRecordId">
+                <Select allowClear placeholder="选择冻结记录（选填）">
+                  {(data.freezeRecords || []).map((fr: any) => (
+                    <Option key={fr.id} value={fr.id}>
+                      {formatDate(fr.initiatedAt)} - {FreezeReasonLabels[fr.freezeReason] || fr.freezeReason}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="超限时长(分钟)" name="exceededDurationMinutes">
+                <InputNumber min={0} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="复核后是否可用"
+                name="isUsableAfterReview"
+                initialValue={null}
+              >
+                <Select allowClear>
+                  <Option value={true}>是 - 可用</Option>
+                  <Option value={false}>否 - 不可用</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={24}>
+              <Form.Item
+                label="结论详情"
+                name="conclusionDetail"
+                rules={[{ required: true, message: '请填写复核详情' }]}
+              >
+                <TextArea rows={4} placeholder="请详细描述复核结论依据" />
+              </Form.Item>
+            </Col>
+            <Col span={24}>
+              <Form.Item label="后续步骤建议" name="nextStep">
+                <Input placeholder="如：继续运输、返回研究中心、销毁等" />
+              </Form.Item>
+            </Col>
+            <Col span={24}>
+              <Form.Item label="证据文件" name="evidenceFiles">
+                <Input placeholder="文件路径/链接（多个用逗号分隔，选填）" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <div style={{ textAlign: 'right' }}>
+            <Space>
+              <Button onClick={() => setReviewModalOpen(false)}>取消</Button>
+              <Button type="primary" htmlType="submit">
+                提交复核
               </Button>
             </Space>
           </div>

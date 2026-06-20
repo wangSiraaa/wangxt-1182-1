@@ -56,6 +56,18 @@ export enum ApprovalType {
   DESTROY = 'destroy',
 }
 
+export enum TemperatureReviewConclusion {
+  USABLE = 'usable',
+  UNUSABLE = 'unusable',
+  PENDING = 'pending',
+}
+
+export enum BoxSplitStatus {
+  PENDING = 'pending',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+}
+
 export const SAMPLE_FLOW_NODES = [
   { key: SampleBoxStatus.DRAFT, label: '草稿', role: UserRole.RESEARCH_CENTER },
   { key: SampleBoxStatus.REGISTERED, label: '已登记', role: UserRole.RESEARCH_CENTER },

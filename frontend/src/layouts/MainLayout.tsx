@@ -13,6 +13,10 @@ import {
   BellOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  LinkOutlined,
+  ExperimentOutlined,
+  ScanOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore, UserRoleLabels } from '../store/auth';
@@ -39,6 +43,10 @@ const iconMap: Record<string, React.ReactNode> = {
   thermometer: <EnvironmentOutlined />,
   snowflake: <SafetyOutlined />,
   check: <CheckCircleOutlined />,
+  link: <LinkOutlined />,
+  lab: <ExperimentOutlined />,
+  scan: <ScanOutlined />,
+  chart: <BarChartOutlined />,
 };
 
 const MainLayout = ({ menuItems, children }: MainLayoutProps) => {

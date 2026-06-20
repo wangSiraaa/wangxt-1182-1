@@ -1,4 +1,4 @@
-import { SampleBoxStatus } from './enums';
+import { SampleBoxStatus, BoxSplitStatus, TemperatureReviewConclusion } from './enums';
 
 export const SampleBoxStatusLabels: Record<SampleBoxStatus, string> = {
   [SampleBoxStatus.DRAFT]: '草稿',
@@ -68,6 +68,36 @@ export const FlightStatusLabels: Record<string, string> = {
   landed: '已降落',
   arrived: '已到达',
   cancelled: '已取消',
+};
+
+export const BoxSplitStatusLabels: Record<BoxSplitStatus, string> = {
+  [BoxSplitStatus.PENDING]: '进行中',
+  [BoxSplitStatus.COMPLETED]: '已完成',
+  [BoxSplitStatus.CANCELLED]: '已取消',
+};
+
+export const TemperatureReviewConclusionLabels: Record<TemperatureReviewConclusion, string> = {
+  [TemperatureReviewConclusion.PENDING]: '待复核',
+  [TemperatureReviewConclusion.USABLE]: '可用',
+  [TemperatureReviewConclusion.UNUSABLE]: '不可用',
+};
+
+export const TemperatureReviewConclusionColors: Record<TemperatureReviewConclusion, string> = {
+  [TemperatureReviewConclusion.PENDING]: 'gold',
+  [TemperatureReviewConclusion.USABLE]: 'green',
+  [TemperatureReviewConclusion.UNUSABLE]: 'red',
+};
+
+export const FlightChangeTypeLabels: Record<string, string> = {
+  reschedule: '改签',
+  reroute: '改航线',
+  cancel: '取消',
+};
+
+export const SplitTypeLabels: Record<string, string> = {
+  by_count: '按数量分箱',
+  by_type: '按类型分箱',
+  manual: '手动分箱',
 };
 
 export const formatTemperature = (temp: number | null | undefined): string => {

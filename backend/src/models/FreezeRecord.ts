@@ -27,6 +27,10 @@ export interface FreezeRecordAttributes {
   destroyedByName?: string;
   destroyedAt?: Date;
   destroyReason?: string;
+  abnormalConclusion?: string;
+  abnormalConclusionById?: string;
+  abnormalConclusionByName?: string;
+  abnormalConclusionAt?: Date;
   remarks?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -61,6 +65,10 @@ export class FreezeRecord extends Model<FreezeRecordAttributes, FreezeRecordCrea
   public destroyedByName?: string;
   public destroyedAt?: Date;
   public destroyReason?: string;
+  public abnormalConclusion?: string;
+  public abnormalConclusionById?: string;
+  public abnormalConclusionByName?: string;
+  public abnormalConclusionAt?: Date;
   public remarks?: string;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -193,6 +201,26 @@ FreezeRecord.init(
       type: DataTypes.STRING(500),
       allowNull: true,
       comment: '销毁原因',
+    },
+    abnormalConclusion: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: '实验室异常结论（温度异常复核结论',
+    },
+    abnormalConclusionById: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      comment: '异常结论填写人ID',
+    },
+    abnormalConclusionByName: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: '异常结论填写人姓名',
+    },
+    abnormalConclusionAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: '异常结论填写时间',
     },
     remarks: {
       type: DataTypes.TEXT,

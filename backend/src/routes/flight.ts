@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import Joi from 'joi';
-import { Flight, SampleBox, FreezeRecord, FlowLog } from '../models';
+import { Flight, SampleBox, FreezeRecord, FlowLog, FlightChangeRecord } from '../models';
 import { AuthRequest, authMiddleware, requireRoles } from '../middleware/auth';
 import { validateBody, validateQuery } from '../middleware/validation';
 import { successResponse, errorResponse } from '../utils/response';
@@ -120,11 +120,17 @@ router.get('/:id', authMiddleware, async (req: AuthRequest, res, next) => {
         })
       : [];
 
+    const changeRecords = await FlightChangeRecord.findAll({
+      where: { flightId: flight.id },
+      order: [['operatedAt', 'DESC']],
+    });
+
     return successResponse(
       res,
       {
         ...flight.toJSON(),
         sampleBoxes,
+        changeRecords,
       },
       '查询成功'
     );

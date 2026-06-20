@@ -55,3 +55,15 @@ export enum ApprovalType {
   THAW = 'thaw',
   DESTROY = 'destroy',
 }
+
+export enum TemperatureReviewConclusion {
+  USABLE = 'usable',
+  UNUSABLE = 'unusable',
+  PENDING = 'pending',
+}
+
+export enum BoxSplitStatus {
+  PENDING = 'pending',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+}
