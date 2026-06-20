@@ -13,6 +13,7 @@ export const seedDatabase = async () => {
       process.exit(0);
     }
 
+    // Use per-user hooks so research1/customs1/lab1 seeded passwords stay loginable.
     const users = await User.bulkCreate([
       {
         username: 'admin',

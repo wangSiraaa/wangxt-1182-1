@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
+  // Preserve /api so /auth/login still hits backend app.use('/api', routes).
   const proxyTarget = env.VITE_PROXY_TARGET || 'http://localhost:19482';
 
   return {
